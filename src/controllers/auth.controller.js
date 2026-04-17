@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs';
-import { User } from '../models/user.model.js';
+import  User  from '../models/user.model.js';
 import { signToken } from '../utils/jwt.js';
 
 /**
@@ -13,7 +13,39 @@ import { signToken } from '../utils/jwt.js';
  */
 export async function register(req, res, next) {
   try {
-    // Your code here
+    let { name, email, password } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: { message: 'Name is required' } });
+    }
+    if (!email) {
+      return res.status(400).json({ error: { message: 'Email is required' } });
+    }
+    if (!password) {
+      return res.status(400).json({ error: { message: 'Password is required' } });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: { message: 'Password must be at least 6 characters' } });
+    }
+
+    name = name.trim();
+    email = email.trim().toLowerCase();
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: { message: 'Invalid email format' } });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ error: { message: 'Email already exists' } });
+    }
+
+    const user = await User.create({ name, email, password });
+    const userObj = user.toObject();
+    delete userObj.password;
+    return res.status(201).json({ user: userObj });
+
   } catch (error) {
     next(error);
   }
@@ -33,6 +65,21 @@ export async function register(req, res, next) {
 export async function login(req, res, next) {
   try {
     // Your code here
+    const { email, password } = req.body
+    const user = await User.findOne({email}).select('+password')
+
+    if(!user) return res.status(401).json({ error: { message: "Invalid credentials" } })
+
+    const passwordCompare = await bcrypt.compare(password, user.password)
+
+    if(!passwordCompare) return res.status(401).json({ error: { message: "Invalid credentials" } })
+
+    const Token = signToken({ userId: user._id, email: user.email, role: user.role })
+
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    return res.status(200).json({ token: Token, user: userObj })
   } catch (error) {
     next(error);
   }
@@ -47,6 +94,7 @@ export async function login(req, res, next) {
 export async function me(req, res, next) {
   try {
     // Your code here
+    return res.status(200).json({ user: req.user })
   } catch (error) {
     next(error);
   }
